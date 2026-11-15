@@ -83,6 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             popover.performClose(nil)
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            focusControls()
         }
     }
 
@@ -137,6 +138,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
+    private func focusControls() {
+        // A popover anchored to a non-activating timer can be visible while the
+        // previous app still owns the keyboard. Make this app and its popover key.
+        NSApp.activate(ignoringOtherApps: true)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
     private func installMainMenu() {
         let main = NSMenu()
         let appItem = NSMenuItem()
@@ -159,10 +167,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func handleShortcut(_ event: NSEvent) -> NSEvent? {
         let flags = event.modifierFlags.intersection([.control, .command, .option, .shift])
-        guard flags == .control, let key = event.charactersIgnoringModifiers?.lowercased() else { return event }
-        switch key {
-        case "w": closeFrontWindow(); return nil
-        case "q": quit(); return nil
+        guard flags == .control else { return event }
+        // Control changes a letter into a control character in AppKit, so use
+        // physical key codes instead of charactersIgnoringModifiers.
+        switch event.keyCode {
+        case 13: closeFrontWindow(); return nil  // W
+        case 12: quit(); return nil              // Q
         default: return event
         }
     }
@@ -225,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let width = max(80, pointSize * CGFloat(title.count) * 0.7 + 20)
         let height = pointSize + 24
         if overlayPanel == nil {
-            let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            let panel = FocusOverlayPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
                                 styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isOpaque = false
             panel.backgroundColor = .clear

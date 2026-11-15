@@ -1,5 +1,11 @@
 import AppKit
 
+/// Takes keyboard focus on click without activating the app or changing Spaces.
+final class FocusOverlayPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 /// Transparent, draggable timer surface. A click opens the controls; a drag moves the panel.
 final class FloatingTimerCanvas: NSView {
     var clockText = "00:00" { didSet { needsDisplay = true } }
@@ -15,6 +21,7 @@ final class FloatingTimerCanvas: NSView {
     override var isOpaque: Bool { false }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override var needsPanelToBecomeKey: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
         let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .semibold)
