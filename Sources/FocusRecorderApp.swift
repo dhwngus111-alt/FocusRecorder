@@ -120,8 +120,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func showHistoryAction() { showHistory() }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func closeFrontWindow() {
+        // Keep the menu bar timer and the current focus session running.
+        // Closing the controls alone leaves the floating digits on screen.
+        store.overlayVisible = false
+        overlayPanel?.orderOut(nil)
         if popover.isShown { popover.performClose(nil) }
-        else { NSApp.keyWindow?.performClose(nil) }
+        timerWindow?.orderOut(nil)
+        historyWindow?.orderOut(nil)
     }
 
     private func dismissControls() {
@@ -157,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let fileItem = NSMenuItem()
         let fileMenu = NSMenu(title: "파일")
-        let closeItem = NSMenuItem(title: "창 닫기", action: #selector(closeFrontWindow), keyEquivalent: "w")
+        let closeItem = NSMenuItem(title: "화면 타이머 숨기기", action: #selector(closeFrontWindow), keyEquivalent: "w")
         closeItem.target = self
         fileMenu.addItem(closeItem)
         fileItem.submenu = fileMenu
