@@ -6,7 +6,13 @@ private struct SavedState: Codable {
     var active: ActiveSession?
     var overlayVisible: Bool
     var overlayFontSize: Double
-    var menuFontSize: Double
+    var alwaysOnTop: Bool?
+    var overlayPosition: OverlayPosition?
+}
+
+struct OverlayPosition: Codable, Equatable {
+    var centerX: Double
+    var centerY: Double
 }
 
 @MainActor
@@ -16,7 +22,8 @@ final class FocusStore: ObservableObject {
     @Published private(set) var now = Date()
     @Published var overlayVisible = true { didSet { save() } }
     @Published var overlayFontSize = 32.0 { didSet { save() } }
-    @Published var menuFontSize = 18.0 { didSet { save() } }
+    @Published var alwaysOnTop = true { didSet { save() } }
+    private(set) var overlayPosition: OverlayPosition? { didSet { save() } }
 
     private let fileURL: URL
 
@@ -31,6 +38,10 @@ final class FocusStore: ObservableObject {
     var elapsed: Int { active?.elapsed(at: now) ?? 0 }
     var target: Int { active?.targetSeconds ?? 0 }
     var isRunning: Bool { active?.resumedAt != nil }
+
+    func moveOverlay(center: NSPoint) {
+        overlayPosition = OverlayPosition(centerX: Double(center.x), centerY: Double(center.y))
+    }
 
     func tick() {
         now = Date()
@@ -105,13 +116,14 @@ final class FocusStore: ObservableObject {
         active = state.active
         overlayVisible = state.overlayVisible
         overlayFontSize = state.overlayFontSize
-        menuFontSize = state.menuFontSize
+        alwaysOnTop = state.alwaysOnTop ?? true
+        overlayPosition = state.overlayPosition
     }
 
     private func save() {
         let state = SavedState(records: records, active: active,
                                overlayVisible: overlayVisible, overlayFontSize: overlayFontSize,
-                               menuFontSize: menuFontSize)
+                               alwaysOnTop: alwaysOnTop, overlayPosition: overlayPosition)
         guard let data = try? JSONEncoder().encode(state) else { return }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),

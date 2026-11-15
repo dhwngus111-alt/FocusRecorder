@@ -49,13 +49,17 @@ struct TimerPopoverView: View {
 
             Divider()
             Toggle("화면에 타이머 띄우기", isOn: $store.overlayVisible)
+            Toggle("항상 다른 창 위에 표시", isOn: $store.alwaysOnTop)
             HStack {
-                Text("숫자 크기")
-                Slider(value: $store.menuFontSize, in: 12...24, step: 1)
-                Text("\(Int(store.menuFontSize))")
+                Text("화면 타이머 크기")
+                Slider(value: $store.overlayFontSize, in: 12...80, step: 1)
+                Text("\(Int(store.overlayFontSize))")
                     .monospacedDigit()
                     .frame(width: 25, alignment: .trailing)
             }
+            Text("화면의 숫자를 드래그하여 이동할 수 있습니다.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding(18)
         .frame(width: 300)
@@ -171,16 +175,15 @@ struct HistoryView: View {
                 Divider()
                 Text("표시 설정").font(.headline)
                 Toggle("화면에 타이머 띄우기", isOn: $store.overlayVisible)
-                HStack {
-                    Text("메뉴 막대 숫자 크기")
-                    Slider(value: $store.menuFontSize, in: 12...24, step: 1)
-                    Text("\(Int(store.menuFontSize)) pt").frame(width: 42, alignment: .trailing)
-                }
+                Toggle("항상 다른 창 위에 표시", isOn: $store.alwaysOnTop)
                 HStack {
                     Text("화면 타이머 숫자 크기")
-                    Slider(value: $store.overlayFontSize, in: 18...90, step: 1)
+                    Slider(value: $store.overlayFontSize, in: 12...80, step: 1)
                     Text("\(Int(store.overlayFontSize)) pt").frame(width: 42, alignment: .trailing)
                 }
+                Text("화면의 숫자를 드래그하여 이동하면 위치가 저장됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(24)
         }
@@ -214,18 +217,3 @@ struct HistoryView: View {
     }
 }
 
-struct FloatingTimerView: View {
-    @ObservedObject var store: FocusStore
-    let onClick: () -> Void
-
-    var body: some View {
-        Text(TimeText.clock(store.elapsed))
-            .font(.system(size: store.overlayFontSize, weight: .semibold, design: .monospaced))
-            .monospacedDigit()
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
-            .padding(8)
-            .background(.clear)
-            .onTapGesture(perform: onClick)
-    }
-}

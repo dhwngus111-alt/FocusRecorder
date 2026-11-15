@@ -15,7 +15,8 @@ fi
 
 swiftc -O -sdk "$sdk_path" \
   -framework AppKit -framework SwiftUI -framework Combine \
-  Sources/FocusCore.swift Sources/FocusStore.swift Sources/Views.swift Sources/FocusRecorderApp.swift \
+  Sources/FocusCore.swift Sources/FocusStore.swift Sources/Views.swift \
+  Sources/FloatingTimerCanvas.swift Sources/FocusRecorderApp.swift \
   -o dist/FocusRecorder.app/Contents/MacOS/FocusRecorder
 
 cp Info.plist dist/FocusRecorder.app/Contents/Info.plist
