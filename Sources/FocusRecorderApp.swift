@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var overlayPanel: NSPanel?
     private var overlayCanvas: FloatingTimerCanvas?
     private var tickTimer: Timer?
+    private var shortcutMonitor: Any?
     private var subscriptions = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -26,6 +27,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         NSApp.setActivationPolicy(.regular)
         NSApp.applicationIconImage = makeAppIcon()
+        installMainMenu()
+        shortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleShortcut(event) ?? event
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.target = self
         statusItem.button?.action = #selector(statusClicked)
@@ -34,9 +39,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover = NSPopover()
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentSize = NSSize(width: 300, height: 390)
+        popover.contentSize = NSSize(width: 280, height: 320)
         popover.contentViewController = NSHostingController(rootView:
-            TimerPopoverView(store: store, openHistory: { [weak self] in self?.showHistory() }))
+            TimerPopoverView(store: store,
+                             openHistory: { [weak self] in self?.showHistory() },
+                             onStart: { [weak self] in self?.dismissControls() }))
 
         store.objectWillChange
             .receive(on: RunLoop.main)
@@ -57,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         guard lockFD >= 0 else { return }
+        if let shortcutMonitor { NSEvent.removeMonitor(shortcutMonitor) }
         store.stop()
         Darwin.close(lockFD)
         lockFD = -1
@@ -75,7 +83,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             popover.performClose(nil)
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
@@ -94,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         menu.addItem(withTitle: "집중 기록 및 설정", action: #selector(showHistoryAction), keyEquivalent: "")
         menu.addItem(withTitle: store.overlayVisible ? "화면 타이머 숨기기" : "화면 타이머 표시",
                      action: #selector(toggleOverlay), keyEquivalent: "")
+        menu.addItem(withTitle: "화면 타이머 위치 초기화", action: #selector(resetOverlayPosition), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "종료", action: #selector(quit), keyEquivalent: "")
         for item in menu.items { item.target = self }
@@ -103,8 +111,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func togglePause() { store.pauseOrResume() }
     @objc private func stop() { store.stop() }
     @objc private func toggleOverlay() { store.overlayVisible.toggle() }
+    @objc private func resetOverlayPosition() {
+        store.resetOverlayPosition()
+        overlayPanel?.orderOut(nil)
+        refreshDisplay()
+    }
     @objc private func showHistoryAction() { showHistory() }
     @objc private func quit() { NSApp.terminate(nil) }
+    @objc private func closeFrontWindow() {
+        if popover.isShown { popover.performClose(nil) }
+        else { NSApp.keyWindow?.performClose(nil) }
+    }
+
+    private func dismissControls() {
+        popover.performClose(nil)
+        timerWindow?.orderOut(nil)
+        historyWindow?.orderOut(nil)
+    }
+
+    private func showControls(nextTo view: NSView) {
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .maxY)
+        }
+    }
+
+    private func installMainMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu(title: "집중기록기")
+        let quitItem = NSMenuItem(title: "집중기록기 종료", action: #selector(quit), keyEquivalent: "q")
+        quitItem.target = self
+        appMenu.addItem(quitItem)
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let fileItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "파일")
+        let closeItem = NSMenuItem(title: "창 닫기", action: #selector(closeFrontWindow), keyEquivalent: "w")
+        closeItem.target = self
+        fileMenu.addItem(closeItem)
+        fileItem.submenu = fileMenu
+        main.addItem(fileItem)
+        NSApp.mainMenu = main
+    }
+
+    private func handleShortcut(_ event: NSEvent) -> NSEvent? {
+        let flags = event.modifierFlags.intersection([.control, .command, .option, .shift])
+        guard flags == .control, let key = event.charactersIgnoringModifiers?.lowercased() else { return event }
+        switch key {
+        case "w": closeFrontWindow(); return nil
+        case "q": quit(); return nil
+        default: return event
+        }
+    }
 
     private func showHistory() {
         popover.performClose(nil)
@@ -125,11 +186,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func showTimerWindow() {
         if timerWindow == nil {
             let controller = NSHostingController(rootView:
-                TimerPopoverView(store: store, openHistory: { [weak self] in self?.showHistory() }))
+                TimerPopoverView(store: store,
+                                 openHistory: { [weak self] in self?.showHistory() },
+                                 onStart: { [weak self] in self?.dismissControls() }))
             let window = NSWindow(contentViewController: controller)
             window.title = "집중 타이머"
             window.styleMask = [.titled, .closable]
-            window.setContentSize(NSSize(width: 320, height: 350))
+            window.setContentSize(NSSize(width: 280, height: 320))
             window.center()
             window.isReleasedWhenClosed = false
             timerWindow = window
@@ -172,7 +235,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             panel.hidesOnDeactivate = false
             let canvas = FloatingTimerCanvas(frame: NSRect(x: 0, y: 0, width: width, height: height))
             canvas.autoresizingMask = [.width, .height]
-            canvas.onClick = { [weak self] in self?.showTimerWindow() }
+            canvas.onClick = { [weak self, weak canvas] in
+                guard let canvas else { return }
+                self?.showControls(nextTo: canvas)
+            }
             canvas.onMove = { [weak self] center in self?.store.moveOverlay(center: center) }
             canvas.onRightClick = { [weak self] view in
                 self?.contextMenu().popUp(positioning: nil,
@@ -184,7 +250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         if let panel = overlayPanel {
             let previousLevel = panel.level
-            panel.level = store.alwaysOnTop ? .floating : .normal
+            panel.level = store.alwaysOnTop ? .statusBar : .normal
             let center: NSPoint
             if panel.isVisible {
                 center = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
@@ -195,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                                   width: width, height: height), display: true)
             overlayCanvas?.clockText = title
             overlayCanvas?.fontSize = pointSize
-            if !panel.isVisible || (store.alwaysOnTop && previousLevel != .floating) {
+            if !panel.isVisible || (store.alwaysOnTop && previousLevel != .statusBar) {
                 if store.alwaysOnTop { panel.orderFrontRegardless() }
                 else { panel.orderFront(nil) }
             }
@@ -205,7 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func initialOverlayCenter() -> NSPoint {
         if let saved = store.overlayPosition {
             let point = NSPoint(x: saved.centerX, y: saved.centerY)
-            if NSScreen.screens.contains(where: { $0.visibleFrame.contains(point) }) { return point }
+            if NSScreen.screens.contains(where: { $0.frame.contains(point) }) { return point }
         }
         guard let frame = NSScreen.main?.visibleFrame else { return NSPoint(x: 500, y: 700) }
         return NSPoint(x: frame.midX, y: frame.maxY - 45)
@@ -233,21 +299,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         icon.lockFocus()
         let background = NSBezierPath(roundedRect: NSRect(x: 8, y: 8, width: 112, height: 112),
                                       xRadius: 28, yRadius: 28)
-        NSGradient(starting: NSColor(red: 0.14, green: 0.43, blue: 0.94, alpha: 1),
-                   ending: NSColor(red: 0.08, green: 0.15, blue: 0.42, alpha: 1))?
-            .draw(in: background, angle: -60)
-        let ring = NSBezierPath(ovalIn: NSRect(x: 27, y: 27, width: 74, height: 74))
-        ring.lineWidth = 7
-        NSColor.white.setStroke()
-        ring.stroke()
-        let hand = NSBezierPath()
-        hand.lineWidth = 6
-        hand.lineCapStyle = .round
-        hand.move(to: NSPoint(x: 64, y: 64))
-        hand.line(to: NSPoint(x: 64, y: 88))
-        hand.move(to: NSPoint(x: 64, y: 64))
-        hand.line(to: NSPoint(x: 80, y: 55))
-        hand.stroke()
+        NSColor(red: 0.995, green: 0.991, blue: 0.982, alpha: 1).setFill()
+        background.fill()
+        let loops: [(NSRect, NSColor)] = [
+            (NSRect(x: 24, y: 49, width: 58, height: 58), NSColor(red: 0.80, green: 0.75, blue: 0.96, alpha: 1)),
+            (NSRect(x: 46, y: 49, width: 58, height: 58), NSColor(red: 1.00, green: 0.84, blue: 0.71, alpha: 1)),
+            (NSRect(x: 35, y: 22, width: 58, height: 58), NSColor(red: 0.80, green: 0.91, blue: 0.73, alpha: 1))
+        ]
+        for (rect, color) in loops {
+            let loop = NSBezierPath(ovalIn: rect)
+            loop.lineWidth = 5
+            color.setStroke()
+            loop.stroke()
+        }
+        NSColor(red: 0.19, green: 0.18, blue: 0.23, alpha: 1).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 61, y: 61, width: 6, height: 6)).fill()
         icon.unlockFocus()
         return icon
     }

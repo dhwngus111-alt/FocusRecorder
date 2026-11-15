@@ -47,7 +47,16 @@ final class FloatingTimerCanvas: NSView {
         let dy = current.y - start.y
         if abs(dx) > 3 || abs(dy) > 3 { didDrag = true }
         guard didDrag else { return }
-        window.setFrameOrigin(NSPoint(x: origin.x + dx, y: origin.y + dy))
+        let proposed = NSPoint(x: origin.x + dx, y: origin.y + dy)
+        let screen = NSScreen.screens.first { $0.frame.contains(current) } ?? window.screen
+        if let frame = screen?.frame {
+            let maxX = max(frame.minX, frame.maxX - window.frame.width)
+            let maxY = max(frame.minY, frame.maxY - window.frame.height)
+            window.setFrameOrigin(NSPoint(x: min(max(proposed.x, frame.minX), maxX),
+                                          y: min(max(proposed.y, frame.minY), maxY)))
+        } else {
+            window.setFrameOrigin(proposed)
+        }
     }
 
     override func mouseUp(with event: NSEvent) {

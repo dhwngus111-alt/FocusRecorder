@@ -43,6 +43,10 @@ final class FocusStore: ObservableObject {
         overlayPosition = OverlayPosition(centerX: Double(center.x), centerY: Double(center.y))
     }
 
+    func resetOverlayPosition() {
+        overlayPosition = nil
+    }
+
     func tick() {
         now = Date()
         if let session = active, session.elapsed(at: now) >= session.targetSeconds {

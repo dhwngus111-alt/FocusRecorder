@@ -9,8 +9,8 @@
   <key>CFBundleName</key><string>집중기록기</string>
   <key>CFBundleDisplayName</key><string>집중기록기</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.1.0</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleShortVersionString</key><string>1.3.0</string>
+  <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>27.0</string>
   <key>LSUIElement</key><false/>
   <key>NSHighResolutionCapable</key><true/>
